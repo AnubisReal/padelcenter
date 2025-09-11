@@ -2,30 +2,30 @@ name: PadelCenter CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
-    tags: [ 'v*' ]
+    branches: [main, develop]
+    tags: ["v*"]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release type'
+        description: "Release type"
         required: true
-        default: 'patch'
+        default: "patch"
         type: choice
         options:
-        - patch
-        - minor
-        - major
+          - patch
+          - minor
+          - major
       custom_version:
-        description: 'Custom version (optional, overrides release_type)'
+        description: "Custom version (optional, overrides release_type)"
         required: false
         type: string
 
 env:
   APP_NAME: PadelCenter
-  FLUTTER_VERSION: '3.24.0'
-  JAVA_VERSION: '17'
+  FLUTTER_VERSION: "3.27.0"
+  JAVA_VERSION: "17"
 
 jobs:
   # ====================================
@@ -42,8 +42,13 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: 'stable'
+          channel: "stable"
           cache: true
+
+      - name: 🔧 Configure Flutter
+        run: |
+          flutter config --no-analytics
+          flutter config --no-cli-animations
 
       - name: 📦 Get Dependencies
         run: flutter pub get
@@ -84,7 +89,7 @@ jobs:
             artifact_name: padelcenter-web
 
     runs-on: ${{ matrix.os }}
-    
+
     steps:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
@@ -95,15 +100,20 @@ jobs:
         if: matrix.platform == 'Android'
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: "temurin"
           java-version: ${{ env.JAVA_VERSION }}
 
       - name: 🐦 Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: 'stable'
+          channel: "stable"
           cache: true
+
+      - name: 🔧 Configure Flutter
+        run: |
+          flutter config --no-analytics
+          flutter config --no-cli-animations
 
       - name: 📦 Get Dependencies
         run: flutter pub get
@@ -160,7 +170,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
-    
+
     steps:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
@@ -216,33 +226,33 @@ jobs:
         run: |
           cat > release_notes.md << EOF
           # 🎯 PadelCenter v${{ steps.new_version.outputs.version }}
-          
+
           ## 📱 Plataformas Disponibles
           - **Android**: APK universal y específicos por arquitectura
           - **iOS**: IPA sin firmar (requiere desarrollo/distribución)
           - **Web**: Aplicación web desplegada automáticamente
-          
+
           ## 🔧 Información Técnica
           - **Versión**: ${{ steps.new_version.outputs.version }}
           - **Build**: ${{ steps.new_version.outputs.build_number }}
           - **Commit**: $(git rev-parse --short HEAD)
           - **Fecha**: $(date +'%Y-%m-%d %H:%M:%S UTC')
-          
+
           ## 📦 Archivos Incluidos
           $(find ./artifacts -name "*.apk" -o -name "*.ipa" | sed 's|./artifacts/||' | sed 's/^/- /')
-          
+
           ## 🚀 Instalación
-          
+
           ### Android
           1. Descarga el APK universal o específico para tu arquitectura
           2. Habilita "Fuentes desconocidas" en Configuración
           3. Instala el APK
-          
+
           ### iOS
           1. Requiere cuenta de desarrollador de Apple
           2. Firma el IPA con tu certificado
           3. Instala via Xcode o herramientas de distribución
-          
+
           ### Web
           Accede directamente a: [PadelCenter Web](https://tu-usuario.github.io/padelcenter/)
           EOF
@@ -269,7 +279,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-    
+
     steps:
       - name: 📥 Download Web Artifact
         uses: actions/download-artifact@v4
@@ -282,7 +292,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./web-build
-          cname: padelcenter.tu-dominio.com  # Opcional: tu dominio personalizado
+          cname: padelcenter.tu-dominio.com # Opcional: tu dominio personalizado
 
   # ====================================
   # 📊 NOTIFICACIONES
@@ -292,7 +302,7 @@ jobs:
     needs: [release, deploy-web]
     runs-on: ubuntu-latest
     if: always() && (needs.release.result == 'success' || needs.deploy-web.result == 'success')
-    
+
     steps:
       - name: 📱 Success Notification
         run: |
