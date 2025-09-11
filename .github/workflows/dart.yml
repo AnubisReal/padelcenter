@@ -1,4 +1,4 @@
-name: PadelCenterX4 CI/CD
+name: PadelCenter CI/CD
 
 on:
   workflow_dispatch:
@@ -30,7 +30,7 @@ jobs:
         working-directory: build/ios/iphoneos
 
       - name: Zip IPA
-        run: zip -qq -r -9 PadelCenterX4.ipa Payload
+        run: zip -qq -r -9 padelcenter.ipa Payload
         working-directory: build/ios/iphoneos
 
       # -----------------------------
@@ -39,9 +39,9 @@ jobs:
       - run: flutter build apk --release
 
       # -----------------------------
-      # ✅ Web Build
+      # ✅ Web Build con base-href correcto
       # -----------------------------
-      - run: flutter build web --release
+      - run: flutter build web --release --base-href /padelcenter/
 
       # -----------------------------
       # 📦 Publicar en GitHub Release
@@ -51,7 +51,7 @@ jobs:
         with:
           tag_name: v1.0
           name: Release v1.0
-          body: "Release inicial de PadelCenterX4"
+          body: "Release inicial de PadelCenter"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -60,7 +60,7 @@ jobs:
         with:
           tag_name: v1.0
           files: |
-            build/ios/iphoneos/PadelCenterX4.ipa
+            build/ios/iphoneos/padelcenter.ipa
             build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
