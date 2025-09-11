@@ -60,6 +60,9 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  
+  # Para generar iconos de la app
+  flutter_launcher_icons: ^0.13.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -90,3 +93,29 @@ flutter:
           weight: 400
         - asset: assets/fonts/MonumentExtended-Ultrabold.otf
           weight: 800
+
+# Configuración para flutter_launcher_icons
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icons/padelcenterx4.png"
+  min_sdk_android: 21 # android min sdk min:16, default 21
+  
+  # Iconos adaptativos para Android moderno (Pixel 9 Pro, etc.)
+  adaptive_icon_background: "#EAEAEA"  # Fondo gris claro
+  adaptive_icon_foreground: "assets/icons/padelcenterx4transparent.png"
+  adaptive_icon_foreground_inset: 20  # Añade margen para que se vea más pequeño
+  remove_alpha_ios: true
+  
+  web:
+    generate: true
+    image_path: "assets/icons/padelcenterx4.png"
+    background_color: "#7B2CBF"
+    theme_color: "#7B2CBF"
+  windows:
+    generate: true
+    image_path: "assets/icons/padelcenterx4.png"
+    icon_size: 48 # min:48, max:256, default: 48
+  macos:
+    generate: true
+    image_path: "assets/icons/padelcenterx4.png"

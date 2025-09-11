@@ -128,6 +128,26 @@ class MatchService {
     }
   }
 
+  // Get matches with their player counts in a single query (OPTIMIZED)
+  static Future<Map<String, int>> getMatchPlayerCounts() async {
+    try {
+      final response = await _supabase
+          .from('match_players')
+          .select('match_id');
+
+      Map<String, int> playerCounts = {};
+      for (var player in response) {
+        String matchId = player['match_id'];
+        playerCounts[matchId] = (playerCounts[matchId] ?? 0) + 1;
+      }
+
+      return playerCounts;
+    } catch (e) {
+      print('Error fetching match player counts: $e');
+      return {};
+    }
+  }
+
   // Count how many times a user is in a specific match
   static Future<int> countUserInMatch(String matchId, String userId) async {
     try {

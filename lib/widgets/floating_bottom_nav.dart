@@ -71,10 +71,9 @@ class _FloatingBottomNavState extends State<FloatingBottomNav> {
   }) {
     return GestureDetector(
       onTap: () => widget.onTap(index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

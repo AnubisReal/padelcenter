@@ -88,7 +88,7 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
         ),
         child: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
+            padding: EdgeInsets.all(_getPadding(context)),
             child: Form(
               key: _formKey,
               child: Column(
@@ -198,13 +198,16 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                   
                   // Botón de olvidé contraseña (solo en login)
                   if (!_isSignUp)
-                    TextButton(
-                      onPressed: _resetPassword,
-                      child: Text(
-                        '¿Olvidaste tu contraseña?',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.8),
-                          fontSize: 14,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: TextButton(
+                        onPressed: _resetPassword,
+                        child: Text(
+                          '¿Olvidaste tu contraseña?',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ),
@@ -212,32 +215,35 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                   const SizedBox(height: 20),
                   
                   // Cambiar entre login y registro
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _isSignUp ? '¿Ya tienes cuenta? ' : '¿No tienes cuenta? ',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.8),
-                          fontSize: 14,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            _isSignUp = !_isSignUp;
-                          });
-                        },
-                        child: Text(
-                          _isSignUp ? 'Iniciar Sesión' : 'Crear Cuenta',
-                          style: const TextStyle(
-                            color: Colors.white,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _isSignUp ? '¿Ya tienes cuenta? ' : '¿No tienes cuenta? ',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
                             fontSize: 14,
-                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ),
-                    ],
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _isSignUp = !_isSignUp;
+                            });
+                          },
+                          child: Text(
+                            _isSignUp ? 'Iniciar Sesión' : 'Crear Cuenta',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -283,6 +289,11 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
         ),
       ),
     );
+  }
+
+  double _getPadding(BuildContext context) {
+    double screenWidth = MediaQuery.of(context).size.width;
+    return screenWidth < 350 ? 16.0 : 24.0;
   }
 
   @override

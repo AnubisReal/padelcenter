@@ -22,12 +22,26 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+  late PageController _pageController;
 
+  // Cache de las pantallas para mantener el estado
   final List<Widget> _screens = [
     const MatchScreen(),
     const BookingScreen(),
     const ProfileScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +57,10 @@ class _MainScreenState extends State<MainScreen> {
         ),
         child: Stack(
           children: [
-            _screens[_currentIndex],
+            IndexedStack(
+              index: _currentIndex,
+              children: _screens,
+            ),
             Positioned(
               bottom: 0,
               left: 0,
@@ -71,10 +88,13 @@ class MatchScreen extends StatefulWidget {
   State<MatchScreen> createState() => _MatchScreenState();
 }
 
-class _MatchScreenState extends State<MatchScreen> {
+class _MatchScreenState extends State<MatchScreen> with AutomaticKeepAliveClientMixin {
   String selectedLevel = 'todas';
   List<Map<String, dynamic>> allMatches = [];
   bool isLoading = true;
+
+  @override
+  bool get wantKeepAlive => true;
 
   final List<String> skillLevels = ['todas', 'bajo', 'medio', 'medio alto'];
 
@@ -94,47 +114,49 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 
   Future<void> _loadMatches() async {
+    setState(() {
+      isLoading = true;
+    });
+    
     try {
-      // Primero cargar partidos existentes de la base de datos
-      final existingMatches = await MatchService.getMatches();
+      // Cargar partidos existentes y conteos de jugadores en paralelo (OPTIMIZADO)
+      final futures = await Future.wait([
+        MatchService.getMatches(),
+        MatchService.getMatchPlayerCounts(),
+      ]);
+
+      final existingMatches = futures[0] as List<Map<String, dynamic>>;
+      final playerCounts = futures[1] as Map<String, int>;
+
       print(
         'MainScreen: Loaded ${existingMatches.length} existing matches from database',
       );
+      print('MainScreen: Player counts: $playerCounts');
 
       // Crear un mapa para buscar partidos existentes por combinación de datos
-      // Priorizar partidos que tengan jugadores
+      // Priorizar partidos que tengan jugadores usando los conteos
       Map<String, Map<String, dynamic>> existingMatchMap = {};
 
       for (var match in existingMatches) {
         String key = '${match['court_number']}_${match['start_time']}';
+        String matchId = match['id'];
+        int currentPlayerCount = playerCounts[matchId] ?? 0;
 
-        // Si ya existe un partido para esta clave, verificar cuál tiene jugadores
+        // Si ya existe un partido para esta clave, verificar cuál tiene más jugadores
         if (existingMatchMap.containsKey(key)) {
-          // Verificar cuál partido tiene jugadores
-          final currentMatchPlayers = await MatchService.getMatchPlayers(
-            existingMatchMap[key]!['id'],
-          );
-          final newMatchPlayers = await MatchService.getMatchPlayers(
-            match['id'],
-          );
+          String existingMatchId = existingMatchMap[key]!['id'];
+          int existingPlayerCount = playerCounts[existingMatchId] ?? 0;
 
           // Si el nuevo partido tiene jugadores y el actual no, usar el nuevo
-          if (newMatchPlayers.isNotEmpty && currentMatchPlayers.isEmpty) {
+          if (currentPlayerCount > 0 && existingPlayerCount == 0) {
             existingMatchMap[key] = match;
-            print(
-              'MainScreen: Replaced match for ${match['court_number']} at ${match['start_time']} with ID ${match['id']} (has ${newMatchPlayers.length} players)',
-            );
-          } else if (currentMatchPlayers.isNotEmpty) {
-            print(
-              'MainScreen: Keeping existing match for ${match['court_number']} at ${match['start_time']} with ID ${existingMatchMap[key]!['id']} (has ${currentMatchPlayers.length} players)',
-            );
+          } else if (currentPlayerCount > existingPlayerCount) {
+            // Si el nuevo tiene más jugadores, usarlo
+            existingMatchMap[key] = match;
           }
+          // Si ambos tienen jugadores o el actual tiene más, mantener el actual
         } else {
           existingMatchMap[key] = match;
-          final matchPlayers = await MatchService.getMatchPlayers(match['id']);
-          print(
-            'MainScreen: Found match - ${match['court_number']} at ${match['start_time']} with ID ${match['id']} (${matchPlayers.length} players)',
-          );
         }
       }
 
@@ -148,9 +170,6 @@ class _MatchScreenState extends State<MatchScreen> {
         if (existingMatchMap.containsKey(key)) {
           // Usar partido existente de la base de datos
           var existingMatch = existingMatchMap[key]!;
-          print(
-            'MainScreen: Using existing match ${existingMatch['id']} for ${defaultMatch['courtNumber']}',
-          );
           processedMatches.add({
             'matchId': existingMatch['id'],
             'courtNumber': existingMatch['court_number'],
@@ -160,9 +179,6 @@ class _MatchScreenState extends State<MatchScreen> {
           });
         } else {
           // Usar partido por defecto (se creará cuando se abra el MatchCard)
-          print(
-            'MainScreen: No existing match found for ${defaultMatch['courtNumber']}, will create new',
-          );
           processedMatches.add({
             'matchId': null,
             'courtNumber': defaultMatch['courtNumber']!,
@@ -173,10 +189,14 @@ class _MatchScreenState extends State<MatchScreen> {
         }
       }
 
+      print('MainScreen: Final processed matches: ${processedMatches.length}');
+      
       setState(() {
         allMatches = processedMatches;
         isLoading = false;
       });
+      
+      print('MainScreen: UI updated with ${allMatches.length} matches');
     } catch (e) {
       print('Error loading matches: $e');
       // En caso de error, usar partidos por defecto
@@ -208,6 +228,7 @@ class _MatchScreenState extends State<MatchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Padding(
@@ -227,49 +248,66 @@ class _MatchScreenState extends State<MatchScreen> {
             // Filtros de nivel
             SizedBox(
               height: 40,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: skillLevels.length,
-                itemBuilder: (context, index) {
-                  final level = skillLevels[index];
-                  final isSelected = selectedLevel == level;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 12.0),
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          selectedLevel = level;
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? Colors.white
-                              : Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.3),
-                            width: 1,
+              child: ShaderMask(
+                shaderCallback: (Rect bounds) {
+                  return const LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black,
+                      Colors.black,
+                      Colors.transparent,
+                    ],
+                    stops: [0.0, 0.1, 0.9, 1.0],
+                  ).createShader(bounds);
+                },
+                blendMode: BlendMode.dstIn,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(left: 0, right: 20),
+                  itemCount: skillLevels.length,
+                  itemBuilder: (context, index) {
+                    final level = skillLevels[index];
+                    final isSelected = selectedLevel == level;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12.0),
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            selectedLevel = level;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
                           ),
-                        ),
-                        child: Text(
-                          level,
-                          style: TextStyle(
+                          decoration: BoxDecoration(
                             color: isSelected
-                                ? const Color(0xFF1e202e)
-                                : Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                                ? Colors.white
+                                : Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            level,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? const Color(0xFF1e202e)
+                                  : Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
             const SizedBox(height: 20),
@@ -279,19 +317,24 @@ class _MatchScreenState extends State<MatchScreen> {
                   ? const Center(
                       child: CircularProgressIndicator(color: Colors.white),
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 100),
-                      itemCount: filteredMatches.length,
-                      itemBuilder: (context, index) {
-                        final match = filteredMatches[index];
-                        return MatchCard(
-                          matchId: match['matchId'],
-                          courtNumber: match['courtNumber']!,
-                          skillLevel: match['skillLevel']!,
-                          startTime: match['startTime']!,
-                          status: match['status'] ?? 'abierto',
-                        );
-                      },
+                  : RefreshIndicator(
+                      onRefresh: _loadMatches,
+                      color: Colors.white,
+                      backgroundColor: const Color(0xFF60519b),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.only(bottom: 100),
+                        itemCount: filteredMatches.length,
+                        itemBuilder: (context, index) {
+                          final match = filteredMatches[index];
+                          return MatchCard(
+                            matchId: match['matchId'],
+                            courtNumber: match['courtNumber']!,
+                            skillLevel: match['skillLevel']!,
+                            startTime: match['startTime']!,
+                            status: match['status'] ?? 'abierto',
+                          );
+                        },
+                      ),
                     ),
             ),
           ],
@@ -308,13 +351,16 @@ class BookingScreen extends StatefulWidget {
   State<BookingScreen> createState() => _BookingScreenState();
 }
 
-class _BookingScreenState extends State<BookingScreen> {
+class _BookingScreenState extends State<BookingScreen> with AutomaticKeepAliveClientMixin {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   CalendarFormat _calendarFormat = CalendarFormat.month;
   List<Map<String, dynamic>> availableCourts = [];
   bool isLoadingCourts = false;
   Map<String, dynamic>? confirmedReservation;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -349,22 +395,23 @@ class _BookingScreenState extends State<BookingScreen> {
         {'courtNumber': 'pista 6', 'skillLevel': 'nivel', 'startTime': '18:00'},
       ];
 
+      // Cargar conteos de jugadores para optimizar (OPTIMIZADO)
+      final playerCounts = await MatchService.getMatchPlayerCounts();
+
       // Crear mapa de partidos existentes
       Map<String, Map<String, dynamic>> existingMatchMap = {};
 
       for (var match in existingMatches) {
         String key = '${match['court_number']}_${match['start_time']}';
+        String matchId = match['id'];
+        int currentPlayerCount = playerCounts[matchId] ?? 0;
 
         if (existingMatchMap.containsKey(key)) {
-          // Si ya existe, verificar cuál tiene jugadores
-          final currentMatchPlayers = await MatchService.getMatchPlayers(
-            existingMatchMap[key]!['id'],
-          );
-          final newMatchPlayers = await MatchService.getMatchPlayers(
-            match['id'],
-          );
+          String existingMatchId = existingMatchMap[key]!['id'];
+          int existingPlayerCount = playerCounts[existingMatchId] ?? 0;
 
-          if (newMatchPlayers.isNotEmpty && currentMatchPlayers.isEmpty) {
+          // Priorizar el partido con más jugadores
+          if (currentPlayerCount > existingPlayerCount) {
             existingMatchMap[key] = match;
           }
         } else {
@@ -549,6 +596,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Padding(
@@ -1019,11 +1067,14 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveClientMixin {
   String _playerName = 'Nombre del Jugador';
   String? _profileImagePath;
   bool _isLoading = true;
   final ImagePicker _picker = ImagePicker();
+
+  @override
+  bool get wantKeepAlive => true;
 
   Map<String, String?> playerData = {
     'side': null,
@@ -1289,6 +1340,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     if (_isLoading) {
       return const Scaffold(
         backgroundColor: Colors.transparent,
