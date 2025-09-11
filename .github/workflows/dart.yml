@@ -1,0 +1,75 @@
+name: PadelCenterX4 CI/CD
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build iOS, Android & Web
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          architecture: x64
+
+      - run: flutter pub get
+
+      # -----------------------------
+      # ✅ iOS Build (IPA sin firmar)
+      # -----------------------------
+      - run: flutter build ios --release --no-codesign
+
+      - run: mkdir Payload
+        working-directory: build/ios/iphoneos
+
+      - run: mv Runner.app Payload
+        working-directory: build/ios/iphoneos
+
+      - name: Zip IPA
+        run: zip -qq -r -9 PadelCenterX4.ipa Payload
+        working-directory: build/ios/iphoneos
+
+      # -----------------------------
+      # ✅ Android Build (APK)
+      # -----------------------------
+      - run: flutter build apk --release
+
+      # -----------------------------
+      # ✅ Web Build
+      # -----------------------------
+      - run: flutter build web --release
+
+      # -----------------------------
+      # 📦 Publicar en GitHub Release
+      # -----------------------------
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0
+          name: Release v1.0
+          body: "Release inicial de PadelCenterX4"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload IPA & APK to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0
+          files: |
+            build/ios/iphoneos/PadelCenterX4.ipa
+            build/app/outputs/flutter-apk/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # -----------------------------
+      # 🌐 Deploy Web to GitHub Pages
+      # -----------------------------
+      - name: Deploy Web to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/web
