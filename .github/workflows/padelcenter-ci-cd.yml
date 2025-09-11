@@ -24,7 +24,7 @@ on:
 
 env:
   APP_NAME: PadelCenter
-  FLUTTER_VERSION: "3.27.0"
+  FLUTTER_VERSION: "3.35.3"
   JAVA_VERSION: "17"
 
 jobs:
