@@ -19,7 +19,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.6.0
+  sdk: ^3.8.1
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -37,16 +37,16 @@ dependencies:
 
   # Supabase dependencies
   supabase_flutter: ^2.5.6
-  
+
   # Para guardar datos localmente
   shared_preferences: ^2.2.2
-  
+
   # Para seleccionar imagen
   image_picker: ^1.0.4
-  
+
   # Para calendario
   table_calendar: ^3.0.9
-  
+
   # Para localización
   intl: ^0.19.0
 
@@ -60,7 +60,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
-  
+
   # Para generar iconos de la app
   flutter_launcher_icons: ^0.13.1
 
@@ -100,13 +100,13 @@ flutter_launcher_icons:
   ios: true
   image_path: "assets/icons/padelcenterx4.png"
   min_sdk_android: 21 # android min sdk min:16, default 21
-  
+
   # Iconos adaptativos para Android moderno (Pixel 9 Pro, etc.)
-  adaptive_icon_background: "#EAEAEA"  # Fondo gris claro
+  adaptive_icon_background: "#EAEAEA" # Fondo gris claro
   adaptive_icon_foreground: "assets/icons/padelcenterx4transparent.png"
-  adaptive_icon_foreground_inset: 20  # Añade margen para que se vea más pequeño
+  adaptive_icon_foreground_inset: 20 # Añade margen para que se vea más pequeño
   remove_alpha_ios: true
-  
+
   web:
     generate: true
     image_path: "assets/icons/padelcenterx4.png"

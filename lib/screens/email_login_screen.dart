@@ -13,7 +13,7 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  
+
   bool _isLoading = false;
   bool _isSignUp = false;
   bool _obscurePassword = true;
@@ -29,11 +29,14 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
     final password = _passwordController.text;
 
     AuthResponse? response;
-    
+
     if (_isSignUp) {
       response = await AuthService.signUpWithEmail(email, password);
       if (response != null && response.user != null) {
-        _showSnackBar('Cuenta creada exitosamente. Revisa tu email para confirmar.', isError: false);
+        _showSnackBar(
+          'Cuenta creada exitosamente. Revisa tu email para confirmar.',
+          isError: false,
+        );
       } else {
         _showSnackBar('Error al crear la cuenta');
       }
@@ -55,7 +58,9 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
       return;
     }
 
-    final success = await AuthService.resetPassword(_emailController.text.trim());
+    final success = await AuthService.resetPassword(
+      _emailController.text.trim(),
+    );
     if (success) {
       _showSnackBar('Email de recuperación enviado', isError: false);
     } else {
@@ -94,15 +99,21 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
               child: Column(
                 children: [
                   const SizedBox(height: 40),
-                  
+
                   // Logo o título
-                  const Icon(
-                    Icons.sports_tennis,
-                    size: 80,
-                    color: Colors.white,
+                  SizedBox(
+                    width: 140,
+                    height: 140,
+                    child: Image.asset(
+                      'assets/icons/padelcenterx4transparent.png',
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
+                      color: Colors.white,
+                      colorBlendMode: BlendMode.srcIn,
+                    ),
                   ),
                   const SizedBox(height: 20),
-                  
+
                   // Título
                   Text(
                     _isSignUp ? 'Crear Cuenta' : 'Iniciar Sesión',
@@ -113,7 +124,7 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 40),
-                  
+
                   // Campo de email
                   _buildTextField(
                     controller: _emailController,
@@ -123,15 +134,17 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Ingresa tu email';
                       }
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                      if (!RegExp(
+                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                      ).hasMatch(value)) {
                         return 'Ingresa un email válido';
                       }
                       return null;
                     },
                   ),
-                  
+
                   const SizedBox(height: 20),
-                  
+
                   // Campo de contraseña
                   _buildTextField(
                     controller: _passwordController,
@@ -139,7 +152,9 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                     obscureText: _obscurePassword,
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                        _obscurePassword
+                            ? Icons.visibility
+                            : Icons.visibility_off,
                         color: Colors.white.withOpacity(0.7),
                       ),
                       onPressed: () {
@@ -158,9 +173,9 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                       return null;
                     },
                   ),
-                  
+
                   const SizedBox(height: 30),
-                  
+
                   // Botón principal
                   SizedBox(
                     width: double.infinity,
@@ -181,7 +196,9 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                               width: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
                               ),
                             )
                           : Text(
@@ -193,9 +210,9 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                             ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 20),
-                  
+
                   // Botón de olvidé contraseña (solo en login)
                   if (!_isSignUp)
                     FittedBox(
@@ -211,9 +228,9 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                         ),
                       ),
                     ),
-                  
+
                   const SizedBox(height: 20),
-                  
+
                   // Cambiar entre login y registro
                   FittedBox(
                     fit: BoxFit.scaleDown,
@@ -221,7 +238,9 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          _isSignUp ? '¿Ya tienes cuenta? ' : '¿No tienes cuenta? ',
+                          _isSignUp
+                              ? '¿Ya tienes cuenta? '
+                              : '¿No tienes cuenta? ',
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.8),
                             fontSize: 14,
@@ -266,10 +285,7 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.2),
-          width: 1,
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
       ),
       child: TextFormField(
         controller: controller,
