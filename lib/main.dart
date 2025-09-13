@@ -4,9 +4,9 @@ import 'app/app.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Inicializar Supabase
   await SupabaseConfig.initialize();
-  
+
   runApp(const PadelCenterApp());
 }

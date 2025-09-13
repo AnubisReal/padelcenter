@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "581274613004",
+    "project_id": "padelcenterx4-65b5e",
+    "storage_bucket": "padelcenterx4-65b5e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:581274613004:android:377881fc8f264cce8f4529",
+        "android_client_info": {
+          "package_name": "com.example.padelcenterx4"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCn8jk7V1waO35d8C63bT2z78kH2AqO9wo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

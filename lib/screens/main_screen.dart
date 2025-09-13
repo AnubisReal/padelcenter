@@ -57,10 +57,7 @@ class _MainScreenState extends State<MainScreen> {
         ),
         child: Stack(
           children: [
-            IndexedStack(
-              index: _currentIndex,
-              children: _screens,
-            ),
+            IndexedStack(index: _currentIndex, children: _screens),
             Positioned(
               bottom: 0,
               left: 0,
@@ -88,7 +85,8 @@ class MatchScreen extends StatefulWidget {
   State<MatchScreen> createState() => _MatchScreenState();
 }
 
-class _MatchScreenState extends State<MatchScreen> with AutomaticKeepAliveClientMixin {
+class _MatchScreenState extends State<MatchScreen>
+    with AutomaticKeepAliveClientMixin {
   String selectedLevel = 'todas';
   List<Map<String, dynamic>> allMatches = [];
   bool isLoading = true;
@@ -117,7 +115,7 @@ class _MatchScreenState extends State<MatchScreen> with AutomaticKeepAliveClient
     setState(() {
       isLoading = true;
     });
-    
+
     try {
       // Cargar partidos existentes y conteos de jugadores en paralelo (OPTIMIZADO)
       final futures = await Future.wait([
@@ -190,12 +188,12 @@ class _MatchScreenState extends State<MatchScreen> with AutomaticKeepAliveClient
       }
 
       print('MainScreen: Final processed matches: ${processedMatches.length}');
-      
+
       setState(() {
         allMatches = processedMatches;
         isLoading = false;
       });
-      
+
       print('MainScreen: UI updated with ${allMatches.length} matches');
     } catch (e) {
       print('Error loading matches: $e');
@@ -351,7 +349,8 @@ class BookingScreen extends StatefulWidget {
   State<BookingScreen> createState() => _BookingScreenState();
 }
 
-class _BookingScreenState extends State<BookingScreen> with AutomaticKeepAliveClientMixin {
+class _BookingScreenState extends State<BookingScreen>
+    with AutomaticKeepAliveClientMixin {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   CalendarFormat _calendarFormat = CalendarFormat.month;
@@ -1067,7 +1066,8 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveClientMixin {
+class _ProfileScreenState extends State<ProfileScreen>
+    with AutomaticKeepAliveClientMixin {
   String _playerName = 'Nombre del Jugador';
   String? _profileImagePath;
   bool _isLoading = true;

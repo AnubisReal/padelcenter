@@ -32,7 +32,7 @@ class _MatchCardState extends State<MatchCard> {
   ]; // 4 player slots
   String? currentUserId;
   String? actualMatchId;
-  bool isLoading = true;
+  bool isLoading = false; // Cambiar a false para mostrar la caja inmediatamente
   late String currentSkillLevel;
   late String currentStatus;
 
@@ -93,11 +93,7 @@ class _MatchCardState extends State<MatchCard> {
     } catch (e) {
       print('Error initializing match: $e');
     } finally {
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-      }
+      // No cambiar isLoading - mantener la caja siempre visible
     }
   }
 
@@ -156,20 +152,7 @@ class _MatchCardState extends State<MatchCard> {
     final today =
         '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
 
-    if (isLoading) {
-      return Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
-        ),
-        child: const Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        ),
-      );
-    }
+    // Eliminar completamente el loading - siempre mostrar la caja
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
