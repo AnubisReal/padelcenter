@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:async';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/floating_bottom_nav.dart';
 import '../widgets/settings_button.dart';
 import '../widgets/player_info_section.dart';
 import '../widgets/logout_button.dart';
 import '../widgets/match_card.dart';
+import '../widgets/confetti_animation.dart';
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
 import '../services/match_service.dart';
+import '../services/court_slot_service.dart';
+import '../config/supabase_config.dart';
+import 'admin_schedule_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -20,27 +26,40 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
   late PageController _pageController;
+  final GlobalKey<_MatchScreenState> _matchScreenKey = GlobalKey();
 
   // Cache de las pantallas para mantener el estado
-  final List<Widget> _screens = [
-    const MatchScreen(),
-    const BookingScreen(),
-    const ProfileScreen(),
-  ];
+  late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    WidgetsBinding.instance.addObserver(this);
+
+    _screens = [
+      MatchScreen(key: _matchScreenKey),
+      const BookingScreen(),
+      const ProfileScreen(),
+    ];
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Cuando la app vuelve al frente, recargar matches
+      _matchScreenKey.currentState?._loadMatches();
+    }
   }
 
   @override
@@ -68,6 +87,10 @@ class _MainScreenState extends State<MainScreen> {
                   setState(() {
                     _currentIndex = index;
                   });
+                  // Si vuelve a la pantalla de matches, recargar
+                  if (index == 0) {
+                    _matchScreenKey.currentState?._loadMatches();
+                  }
                 },
               ),
             ),
@@ -90,25 +113,237 @@ class _MatchScreenState extends State<MatchScreen>
   String selectedLevel = 'todas';
   List<Map<String, dynamic>> allMatches = [];
   bool isLoading = true;
+  StreamSubscription<Map<String, dynamic>>? _courtSlotsSubscription;
+
+  // Set para rastrear animaciones mostradas en esta sesión (evita duplicados)
+  final Set<String> _animationsShownThisSession = {};
 
   @override
   bool get wantKeepAlive => true;
 
   final List<String> skillLevels = ['todas', 'bajo', 'medio', 'medio alto'];
 
-  final List<Map<String, String>> defaultMatches = [
-    {'courtNumber': 'pista 1', 'skillLevel': 'nivel', 'startTime': '09:00'},
-    {'courtNumber': 'pista 2', 'skillLevel': 'nivel', 'startTime': '10:30'},
-    {'courtNumber': 'pista 3', 'skillLevel': 'nivel', 'startTime': '20:00'},
-    {'courtNumber': 'pista 4', 'skillLevel': 'nivel', 'startTime': '14:00'},
-    {'courtNumber': 'pista 5', 'skillLevel': 'nivel', 'startTime': '16:30'},
-    {'courtNumber': 'pista 6', 'skillLevel': 'nivel', 'startTime': '18:00'},
-  ];
-
   @override
   void initState() {
     super.initState();
     _loadMatches();
+    _setupRealtimeListener();
+    _checkForCompletedMatches();
+  }
+
+  StreamSubscription<Map<String, dynamic>>? _matchesSubscription;
+
+  void _setupRealtimeListener() {
+    // Escuchar cambios en court_slots (nuevas pistas disponibles)
+    _courtSlotsSubscription = MatchService.courtSlotsStream.listen((payload) {
+      print('MatchScreen: court_slots changed, reloading matches');
+      _loadMatches();
+    });
+
+    // Escuchar cambios en matches (SOLO para animación de cierre)
+    _matchesSubscription = MatchService.matchesStream.listen((payload) async {
+      print('🔔 MatchScreen: REALTIME EVENT RECEIVED!');
+
+      final event = (payload['event'] as String).toUpperCase();
+      final newData = payload['new'] as Map<String, dynamic>?;
+      final oldData = payload['old'] as Map<String, dynamic>?;
+
+      print('🔔 Event: $event');
+      print('🔔 New data: $newData');
+      print('🔔 Old data: $oldData');
+      print('🔔 Status: ${newData?['status']}');
+
+      // Si el partido cambió de cerrado a abierto, limpiar el historial
+      if (event == 'UPDATE' &&
+          newData != null &&
+          newData['status'] == 'abierto' &&
+          oldData?['status'] == 'cerrado') {
+        final matchId = newData['id'] as String;
+        print(
+          '🔄 Match $matchId changed from CERRADO to ABIERTO - clearing history',
+        );
+
+        final prefs = await SharedPreferences.getInstance();
+
+        // Limpiar de la lista de vistos
+        final seenMatches = prefs.getStringList('seen_completed_matches') ?? [];
+        seenMatches.remove(matchId);
+        await prefs.setStringList('seen_completed_matches', seenMatches);
+
+        // Limpiar timestamp
+        final timestampKey = 'animation_shown_${matchId}_timestamp';
+        await prefs.remove(timestampKey);
+
+        // Limpiar de sesión
+        _animationsShownThisSession.remove(matchId);
+
+        print(
+          '✅ History cleared for match $matchId - animation will show again when closed',
+        );
+      }
+
+      // Si un match está cerrado (UPDATE a cerrado)
+      if (event == 'UPDATE' &&
+          newData != null &&
+          newData['status'] == 'cerrado') {
+        final matchId = newData['id'] as String;
+
+        print('✅ Match $matchId is CERRADO! Checking user...');
+
+        // Verificar si el usuario actual está en este partido
+        final userId = supabase.auth.currentUser?.id;
+        print('👤 Current user ID: $userId');
+
+        if (userId == null) {
+          print('❌ No user logged in');
+          return;
+        }
+
+        final userInMatch = await supabase
+            .from('match_players')
+            .select('id')
+            .eq('match_id', matchId)
+            .eq('user_id', userId)
+            .limit(1);
+
+        print('👥 User in match query result: $userInMatch');
+        print('👥 Is user in match: ${userInMatch.isNotEmpty}');
+
+        if (userInMatch.isNotEmpty) {
+          print('✅ User IS in this match!');
+
+          // El usuario está en este partido, verificar si ya vio la animación
+          final prefs = await SharedPreferences.getInstance();
+          final seenMatches =
+              prefs.getStringList('seen_completed_matches') ?? [];
+
+          print('📝 Seen matches in prefs: $seenMatches');
+          print('📝 Current match: $matchId');
+          print('📝 Shown this session: $_animationsShownThisSession');
+
+          // Verificar si ya se mostró recientemente (últimos 5 segundos)
+          final timestampKey = 'animation_shown_${matchId}_timestamp';
+          final lastShown = prefs.getInt(timestampKey) ?? 0;
+          final now = DateTime.now().millisecondsSinceEpoch;
+          final timeSinceLastShown = now - lastShown;
+
+          print('⏱️ Time since last shown: ${timeSinceLastShown}ms');
+
+          // Verificar SharedPreferences, sesión, y timestamp
+          if (!seenMatches.contains(matchId) &&
+              !_animationsShownThisSession.contains(matchId) &&
+              timeSinceLastShown > 5000) {
+            // 5 segundos
+            print('🎉 SHOWING ANIMATION for match $matchId');
+            // Marcar en sesión inmediatamente para evitar duplicados
+            _animationsShownThisSession.add(matchId);
+            // Marcar timestamp
+            await prefs.setInt(timestampKey, now);
+            // Mostrar animación
+            _showCompletedMatchAnimation(matchId);
+            // Marcar como visto en SharedPreferences
+            seenMatches.add(matchId);
+            await prefs.setStringList('seen_completed_matches', seenMatches);
+          } else {
+            print(
+              '⏭️ Animation already shown for match $matchId (recently or in prefs)',
+            );
+          }
+        } else {
+          print('❌ User is NOT in this match');
+        }
+      } else {
+        print('⏭️ Not a cerrado UPDATE event, skipping');
+      }
+    });
+  }
+
+  // Verificar si hay partidos completados que el usuario no ha visto
+  Future<void> _checkForCompletedMatches() async {
+    try {
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      // Obtener partidos donde el usuario está apuntado y están cerrados
+      final userMatches = await supabase
+          .from('match_players')
+          .select('match_id')
+          .eq('user_id', userId);
+
+      if (userMatches.isEmpty) return;
+
+      final matchIds = userMatches.map((m) => m['match_id'] as String).toList();
+
+      // Buscar matches cerrados
+      final closedMatches = await supabase
+          .from('matches')
+          .select('id')
+          .inFilter('id', matchIds)
+          .eq('status', 'cerrado');
+
+      if (closedMatches.isEmpty) return;
+
+      // Verificar cuáles no ha visto (usando SharedPreferences)
+      final prefs = await SharedPreferences.getInstance();
+      final seenMatches = prefs.getStringList('seen_completed_matches') ?? [];
+
+      for (var match in closedMatches) {
+        final matchId = match['id'] as String;
+        if (!seenMatches.contains(matchId)) {
+          // Mostrar animación
+          _showCompletedMatchAnimation(matchId);
+          // Marcar como visto
+          seenMatches.add(matchId);
+          await prefs.setStringList('seen_completed_matches', seenMatches);
+          break; // Solo mostrar uno a la vez
+        }
+      }
+    } catch (e) {
+      print('Error checking completed matches: $e');
+    }
+  }
+
+  void _showCompletedMatchAnimation(String matchId) {
+    print(
+      'MatchScreen: _showCompletedMatchAnimation called for match $matchId',
+    );
+    print('MatchScreen: mounted=$mounted');
+
+    // Usar WidgetsBinding para asegurar que el frame esté completo
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        print('MatchScreen: Widget not mounted, cannot show animation');
+        return;
+      }
+
+      print('MatchScreen: Showing confetti animation now');
+
+      Navigator.of(context).push(
+        PageRouteBuilder(
+          opaque: false,
+          pageBuilder: (context, animation, secondaryAnimation) {
+            return ConfettiAnimation(
+              onAnimationComplete: () {
+                if (mounted) {
+                  Navigator.of(context).pop();
+                }
+              },
+            );
+          },
+          transitionDuration: const Duration(milliseconds: 300),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _courtSlotsSubscription?.cancel();
+    _matchesSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadMatches() async {
@@ -117,72 +352,84 @@ class _MatchScreenState extends State<MatchScreen>
     });
 
     try {
-      // Cargar partidos existentes y conteos de jugadores en paralelo (OPTIMIZADO)
+      // Cargar pistas disponibles para hoy (solo futuras) y partidos existentes
       final futures = await Future.wait([
-        MatchService.getMatches(),
+        CourtSlotService.getActiveSlotsForToday(),
+        MatchService.getTodayMatches(),
         MatchService.getMatchPlayerCounts(),
       ]);
 
-      final existingMatches = futures[0] as List<Map<String, dynamic>>;
-      final playerCounts = futures[1] as Map<String, int>;
+      final availableSlots = futures[0] as List<Map<String, dynamic>>;
+      final existingMatches = futures[1] as List<Map<String, dynamic>>;
+      final playerCounts = futures[2] as Map<String, int>;
 
-      print(
-        'MainScreen: Loaded ${existingMatches.length} existing matches from database',
-      );
+      print('MainScreen: Loaded ${availableSlots.length} available slots');
+      print('MainScreen: Loaded ${existingMatches.length} existing matches');
       print('MainScreen: Player counts: $playerCounts');
 
-      // Crear un mapa para buscar partidos existentes por combinación de datos
-      // Priorizar partidos que tengan jugadores usando los conteos
+      // Filtrar partidos cuya hora ya pasó
+      final now = DateTime.now();
+      final currentTime =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:00';
+
+      // Crear mapa de partidos existentes
       Map<String, Map<String, dynamic>> existingMatchMap = {};
 
       for (var match in existingMatches) {
+        // Filtrar por hora
+        if (match['start_time'] != null &&
+            match['start_time'].toString().compareTo(currentTime) < 0) {
+          continue; // Saltar partidos cuya hora ya pasó
+        }
+
         String key = '${match['court_number']}_${match['start_time']}';
         String matchId = match['id'];
         int currentPlayerCount = playerCounts[matchId] ?? 0;
 
-        // Si ya existe un partido para esta clave, verificar cuál tiene más jugadores
         if (existingMatchMap.containsKey(key)) {
           String existingMatchId = existingMatchMap[key]!['id'];
           int existingPlayerCount = playerCounts[existingMatchId] ?? 0;
 
-          // Si el nuevo partido tiene jugadores y el actual no, usar el nuevo
-          if (currentPlayerCount > 0 && existingPlayerCount == 0) {
-            existingMatchMap[key] = match;
-          } else if (currentPlayerCount > existingPlayerCount) {
-            // Si el nuevo tiene más jugadores, usarlo
+          if (currentPlayerCount > existingPlayerCount) {
             existingMatchMap[key] = match;
           }
-          // Si ambos tienen jugadores o el actual tiene más, mantener el actual
         } else {
           existingMatchMap[key] = match;
         }
       }
 
-      // Procesar partidos por defecto
+      // Procesar pistas disponibles
       List<Map<String, dynamic>> processedMatches = [];
 
-      for (var defaultMatch in defaultMatches) {
-        String key =
-            '${defaultMatch['courtNumber']}_${defaultMatch['startTime']}';
+      for (var slot in availableSlots) {
+        String courtName = slot['court_name'];
+        String startTime = slot['start_time'].toString().substring(
+          0,
+          5,
+        ); // "HH:MM"
+        String slotId = slot['id'];
+        String key = '${courtName}_$startTime';
 
         if (existingMatchMap.containsKey(key)) {
-          // Usar partido existente de la base de datos
+          // Usar partido existente
           var existingMatch = existingMatchMap[key]!;
           processedMatches.add({
             'matchId': existingMatch['id'],
             'courtNumber': existingMatch['court_number'],
             'skillLevel': existingMatch['skill_level'],
-            'startTime': existingMatch['start_time'],
+            'startTime': startTime,
             'status': existingMatch['status'] ?? 'abierto',
+            'courtSlotId': slotId,
           });
         } else {
-          // Usar partido por defecto (se creará cuando se abra el MatchCard)
+          // Crear entrada para nuevo partido
           processedMatches.add({
             'matchId': null,
-            'courtNumber': defaultMatch['courtNumber']!,
-            'skillLevel': defaultMatch['skillLevel']!,
-            'startTime': defaultMatch['startTime']!,
+            'courtNumber': courtName,
+            'skillLevel': 'nivel',
+            'startTime': startTime,
             'status': 'abierto',
+            'courtSlotId': slotId,
           });
         }
       }
@@ -197,19 +444,8 @@ class _MatchScreenState extends State<MatchScreen>
       print('MainScreen: UI updated with ${allMatches.length} matches');
     } catch (e) {
       print('Error loading matches: $e');
-      // En caso de error, usar partidos por defecto
       setState(() {
-        allMatches = defaultMatches
-            .map(
-              (match) => {
-                'matchId': null,
-                'courtNumber': match['courtNumber']!,
-                'skillLevel': match['skillLevel']!,
-                'startTime': match['startTime']!,
-                'status': 'abierto',
-              },
-            )
-            .toList();
+        allMatches = [];
         isLoading = false;
       });
     }
@@ -330,6 +566,7 @@ class _MatchScreenState extends State<MatchScreen>
                             skillLevel: match['skillLevel']!,
                             startTime: match['startTime']!,
                             status: match['status'] ?? 'abierto',
+                            courtSlotId: match['courtSlotId'],
                           );
                         },
                       ),
@@ -1204,8 +1441,11 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   void _onSettingsPressed() {
-    // TODO: Implementar navegación a configuración
-    print('Settings pressed');
+    print('Settings button pressed - navigating to admin screen');
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AdminScheduleScreen()),
+    );
   }
 
   void _onLogoutPressed() async {
@@ -1357,13 +1597,6 @@ class _ProfileScreenState extends State<ProfileScreen>
       body: SafeArea(
         child: Stack(
           children: [
-            // Botón de configuración en esquina superior derecha
-            Positioned(
-              top: 20,
-              right: 20,
-              child: SettingsButton(onPressed: _onSettingsPressed),
-            ),
-
             // Contenido principal
             SingleChildScrollView(
               padding: const EdgeInsets.all(20.0),
@@ -1438,6 +1671,40 @@ class _ProfileScreenState extends State<ProfileScreen>
 
                   const SizedBox(height: 100), // Espacio para la navegación
                 ],
+              ),
+            ),
+
+            // Botón de configuración en esquina superior derecha (DESPUÉS del scroll)
+            Positioned(
+              top: 20,
+              right: 20,
+              child: GestureDetector(
+                onTap: () {
+                  print('ADMIN BUTTON TAPPED - NAVIGATING');
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AdminScheduleScreen(),
+                    ),
+                  );
+                },
+                child: Container(
+                  width: 45,
+                  height: 45,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.1),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.settings,
+                    color: Colors.white.withOpacity(0.8),
+                    size: 22,
+                  ),
+                ),
               ),
             ),
           ],

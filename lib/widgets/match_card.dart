@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/profile_service.dart';
 import '../services/match_service.dart';
 import 'confetti_animation.dart';
@@ -9,6 +11,7 @@ class MatchCard extends StatefulWidget {
   final String skillLevel;
   final String startTime;
   final String status;
+  final String? courtSlotId;
 
   const MatchCard({
     super.key,
@@ -17,6 +20,7 @@ class MatchCard extends StatefulWidget {
     required this.skillLevel,
     required this.startTime,
     this.status = 'abierto',
+    this.courtSlotId,
   });
 
   @override
@@ -36,12 +40,81 @@ class _MatchCardState extends State<MatchCard> {
   late String currentSkillLevel;
   late String currentStatus;
 
+  // Suscripciones realtime
+  StreamSubscription<Map<String, dynamic>>? _playersSubscription;
+  StreamSubscription<Map<String, dynamic>>? _matchesSubscription;
+
   @override
   void initState() {
     super.initState();
     currentSkillLevel = widget.skillLevel;
     currentStatus = widget.status;
     _initializeMatch();
+    _setupRealtimeListeners();
+  }
+
+  void _setupRealtimeListeners() {
+    // Escuchar cambios en jugadores
+    _playersSubscription = MatchService.matchPlayersStream.listen((payload) {
+      final newData = payload['new'] as Map<String, dynamic>?;
+      final oldData = payload['old'] as Map<String, dynamic>?;
+      final event = (payload['event'] as String).toUpperCase();
+
+      print(
+        'Realtime event: $event, newData: $newData, oldData: $oldData, actualMatchId: $actualMatchId',
+      );
+
+      // Verificar si el cambio es para este partido
+      String? affectedMatchId;
+      if (event == 'DELETE') {
+        // Para DELETE, oldData puede estar vacío si no hay REPLICA IDENTITY FULL
+        // En ese caso, recargamos siempre ya que no podemos saber qué partido fue afectado
+        affectedMatchId = oldData?['match_id'];
+        print('Realtime DELETE: oldData match_id = $affectedMatchId');
+        if (affectedMatchId == null && actualMatchId != null) {
+          // Si no tenemos el match_id del registro eliminado, recargamos por seguridad
+          print(
+            'Realtime: DELETE without match_id, reloading players for $actualMatchId',
+          );
+          _loadMatchPlayers();
+          return;
+        }
+      } else {
+        affectedMatchId = newData?['match_id'];
+      }
+
+      if (affectedMatchId == actualMatchId) {
+        print('Realtime: Reloading players for match $actualMatchId');
+        _loadMatchPlayers();
+      }
+    });
+
+    // Escuchar cambios en partidos (status, nivel)
+    _matchesSubscription = MatchService.matchesStream.listen((payload) {
+      final newData = payload['new'] as Map<String, dynamic>?;
+      final event = payload['event'] as String;
+
+      if (event != 'DELETE' && newData?['id'] == actualMatchId) {
+        print('Realtime: Match $actualMatchId updated');
+        if (mounted) {
+          setState(() {
+            if (newData?['skill_level'] != null) {
+              currentSkillLevel = newData!['skill_level'];
+            }
+            if (newData?['status'] != null) {
+              currentStatus = newData!['status'];
+            }
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _playersSubscription?.cancel();
+    _matchesSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _initializeMatch() async {
@@ -68,6 +141,8 @@ class _MatchCardState extends State<MatchCard> {
           skillLevel: widget.skillLevel,
           startTime: widget.startTime,
           status: widget.status,
+          matchDate: DateTime.now(),
+          courtSlotId: widget.courtSlotId,
         );
         actualMatchId = matchId;
         print('MatchCard: Created new match with ID: $actualMatchId');
@@ -348,14 +423,27 @@ class _MatchCardState extends State<MatchCard> {
     }
   }
 
-  void _showMatchClosedAnimation() {
+  void _showMatchClosedAnimation() async {
+    print('MatchCard: Showing match closed animation for match $actualMatchId');
+
+    if (!mounted || actualMatchId == null) return;
+
+    // Marcar con timestamp para evitar duplicados en los próximos segundos
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'animation_shown_${actualMatchId}_timestamp';
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await prefs.setInt(key, now);
+    print('MatchCard: Marked animation timestamp for $actualMatchId');
+
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
         pageBuilder: (context, animation, secondaryAnimation) {
           return ConfettiAnimation(
             onAnimationComplete: () {
-              Navigator.of(context).pop();
+              if (mounted) {
+                Navigator.of(context).pop();
+              }
             },
           );
         },

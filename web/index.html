@@ -18,22 +18,186 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="PadelCenter - Tu app de pádel">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="theme-color" content="#60519b">
-  <meta name="apple-mobile-web-app-title" content="padelcenter">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a1a1a">
+  <meta name="apple-mobile-web-app-title" content="PadelCenter">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>padelcenter</title>
+  <!-- Preload recursos críticos -->
+  <link rel="preload" href="assets/fonts/MonumentExtended-Regular.otf" as="font" type="font/otf" crossorigin>
+  <link rel="preload" href="assets/fonts/MonumentExtended-Ultrabold.otf" as="font" type="font/otf" crossorigin>
+  <link rel="preload" href="assets/icons/padelcenterx4transparent.png" as="image">
+
+  <title>PadelCenter</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Arial', sans-serif;
+      background-color: #1a1a1a;
+    }
+
+    /* Evitar flash blanco durante la carga */
+    html {
+      background-color: #1a1a1a;
+    }
+
+    #loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #1a1a1a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      transition: opacity 0.5s ease-out;
+    }
+
+    #loading.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Asegurar que Flutter tenga el mismo fondo */
+    flt-glass-pane {
+      background-color: #1a1a1a !important;
+    }
+
+    .splash-content {
+      text-align: center;
+      color: white;
+    }
+
+    .splash-logo {
+      width: 500px !important;
+      height: 500px !important;
+      margin-bottom: 30px;
+      max-width: 85vw;
+      max-height: 55vh;
+      object-fit: contain;
+    }
+
+    .splash-title {
+      font-size: 48px !important;
+      font-weight: bold;
+      margin-bottom: 15px;
+      letter-spacing: 3px;
+      color: #ffffff;
+      animation: fadeInText 1.5s ease-out;
+    }
+
+    .splash-subtitle {
+      font-size: 24px !important;
+      opacity: 0.8;
+      color: #cccccc;
+      font-weight: 500;
+      animation: fadeInText 1.8s ease-out;
+    }
+
+    @keyframes fadeInText {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Ocultar el splash cuando Flutter esté listo */
+    .flutter-ready #loading {
+      display: none;
+    }
+  </style>
 </head>
 <body>
+  <!-- Splash Screen Nativo -->
+  <div id="loading">
+    <div class="splash-content">
+      <img src="assets/icons/padelcenterx4transparent.png" alt="PadelCenter" class="splash-logo">
+      <div class="splash-title">PadelCenter</div>
+      <div class="splash-subtitle">Tu app de pádel</div>
+    </div>
+  </div>
+
+  <script>
+    function changeThemeColor(color) {
+      // Cambiar meta theme-color
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+      if (metaThemeColor) {
+        metaThemeColor.setAttribute('content', color);
+      }
+      
+      // Forzar actualización del status bar en diferentes navegadores
+      const newMeta = document.createElement('meta');
+      newMeta.name = 'theme-color';
+      newMeta.content = color;
+      
+      // Remover el anterior y agregar el nuevo
+      if (metaThemeColor) {
+        metaThemeColor.remove();
+      }
+      document.head.appendChild(newMeta);
+      
+      // Para iOS Safari
+      const appleMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+      if (appleMeta) {
+        appleMeta.setAttribute('content', color === '#1a1a1a' ? 'black-translucent' : 'default');
+      }
+    }
+
+    // Ocultar splash cuando Flutter esté completamente cargado
+    window.addEventListener('flutter-first-frame', function() {
+      const loading = document.getElementById('loading');
+      
+      // Esperar un momento antes de cambiar el color para asegurar que Flutter esté renderizado
+      setTimeout(() => {
+        changeThemeColor('#60519b');
+      }, 100);
+      
+      // Transición inmediata sin delays ni animaciones
+      loading.style.display = 'none';
+    });
+
+    // Fallback: ocultar después de 4 segundos máximo
+    setTimeout(() => {
+      const loading = document.getElementById('loading');
+      if (loading && loading.style.display !== 'none') {
+        changeThemeColor('#60519b');
+        loading.style.display = 'none';
+      }
+    }, 4000);
+
+    // Prevenir flash blanco asegurando fondo oscuro
+    document.addEventListener('DOMContentLoaded', function() {
+      document.body.style.backgroundColor = '#1a1a1a';
+      document.documentElement.style.backgroundColor = '#1a1a1a';
+    });
+
+    // Forzar cambio de color cuando la página esté completamente cargada
+    window.addEventListener('load', function() {
+      setTimeout(() => {
+        const loading = document.getElementById('loading');
+        if (!loading || loading.style.display === 'none') {
+          changeThemeColor('#60519b');
+        }
+      }, 500);
+    });
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

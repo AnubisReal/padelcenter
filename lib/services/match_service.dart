@@ -1,7 +1,102 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:async';
 
 class MatchService {
   static final _supabase = Supabase.instance.client;
+
+  // Stream controller para notificar cambios en jugadores de partidos
+  static final _matchPlayersController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  static Stream<Map<String, dynamic>> get matchPlayersStream =>
+      _matchPlayersController.stream;
+
+  // Stream controller para notificar cambios en partidos
+  static final _matchesController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  static Stream<Map<String, dynamic>> get matchesStream =>
+      _matchesController.stream;
+
+  // Stream controller para notificar cambios en court_slots
+  static final _courtSlotsController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  static Stream<Map<String, dynamic>> get courtSlotsStream =>
+      _courtSlotsController.stream;
+
+  // Suscripciones activas
+  static RealtimeChannel? _matchPlayersChannel;
+  static RealtimeChannel? _matchesChannel;
+  static RealtimeChannel? _courtSlotsChannel;
+
+  // Inicializar suscripciones realtime
+  static void initRealtimeSubscriptions() {
+    // Suscripción a cambios en match_players
+    _matchPlayersChannel = _supabase
+        .channel('match_players_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'match_players',
+          callback: (payload) {
+            print(
+              'Realtime: match_players change detected - ${payload.eventType}',
+            );
+            _matchPlayersController.add({
+              'event': payload.eventType.name,
+              'new': payload.newRecord,
+              'old': payload.oldRecord,
+            });
+          },
+        )
+        .subscribe();
+
+    // Suscripción a cambios en matches
+    _matchesChannel = _supabase
+        .channel('matches_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'matches',
+          callback: (payload) {
+            print('Realtime: matches change detected - ${payload.eventType}');
+            _matchesController.add({
+              'event': payload.eventType.name,
+              'new': payload.newRecord,
+              'old': payload.oldRecord,
+            });
+          },
+        )
+        .subscribe();
+
+    // Suscripción a cambios en court_slots
+    _courtSlotsChannel = _supabase
+        .channel('court_slots_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'court_slots',
+          callback: (payload) {
+            print(
+              'Realtime: court_slots change detected - ${payload.eventType}',
+            );
+            _courtSlotsController.add({
+              'event': payload.eventType.name,
+              'new': payload.newRecord,
+              'old': payload.oldRecord,
+            });
+          },
+        )
+        .subscribe();
+
+    print('Realtime: Subscriptions initialized');
+  }
+
+  // Cancelar suscripciones realtime
+  static void disposeRealtimeSubscriptions() {
+    _matchPlayersChannel?.unsubscribe();
+    _matchesChannel?.unsubscribe();
+    _courtSlotsChannel?.unsubscribe();
+    print('Realtime: Subscriptions disposed');
+  }
 
   // Create a new match
   static Future<String?> createMatch({
@@ -9,8 +104,13 @@ class MatchService {
     required String skillLevel,
     required String startTime,
     String status = 'abierto',
+    DateTime? matchDate,
+    String? courtSlotId,
   }) async {
     try {
+      final date = matchDate ?? DateTime.now();
+      final dateStr = date.toIso8601String().split('T')[0];
+
       final response = await _supabase
           .from('matches')
           .insert({
@@ -18,6 +118,8 @@ class MatchService {
             'skill_level': skillLevel,
             'start_time': startTime,
             'status': status,
+            'match_date': dateStr,
+            'court_slot_id': courtSlotId,
             'created_at': DateTime.now().toIso8601String(),
           })
           .select('id')
@@ -41,6 +143,45 @@ class MatchService {
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       print('Error fetching matches: $e');
+      return [];
+    }
+  }
+
+  // Get matches for today with future times only
+  static Future<List<Map<String, dynamic>>> getTodayMatches() async {
+    try {
+      final now = DateTime.now();
+      final dateStr = now.toIso8601String().split('T')[0];
+
+      final response = await _supabase
+          .from('matches')
+          .select('*')
+          .eq('match_date', dateStr)
+          .order('start_time', ascending: true);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error fetching today matches: $e');
+      return [];
+    }
+  }
+
+  // Get matches for a specific date
+  static Future<List<Map<String, dynamic>>> getMatchesForDate(
+    DateTime date,
+  ) async {
+    try {
+      final dateStr = date.toIso8601String().split('T')[0];
+
+      final response = await _supabase
+          .from('matches')
+          .select('*')
+          .eq('match_date', dateStr)
+          .order('start_time', ascending: true);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error fetching matches for date: $e');
       return [];
     }
   }
