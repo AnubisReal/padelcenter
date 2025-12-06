@@ -30,7 +30,7 @@
 
 [![Android APK](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/tu-usuario/padelcenter/releases/latest/download/PadelCenter-v1.0.0-universal.apk)
 [![iOS IPA](https://img.shields.io/badge/iOS-IPA-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/tu-usuario/padelcenter/releases/latest)
-[![Web App](https://img.shields.io/badge/Web-App-FF6B6B?style=for-the-badge&logo=google-chrome&logoColor=white)](https://tu-usuario.github.io/padelcenter/](https://anubisreal.github.io/padelcenter)
+[![Web App](https://img.shields.io/badge/Web-App-FF6B6B?style=for-the-badge&logo=google-chrome&logoColor=white)](https://tu-usuario.github.io/padelcenter/](https://anubisreal.github.io/padelcenter))
 
 ### 🛠️ Desarrollo Local
 
